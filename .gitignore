@@ -1,0 +1,11 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyc
+
+# Large data files - exclude from repo
+pbp_cache.csv
+*.json
+data/*.json
+
+# Keep .7z in LFS (already configured)
