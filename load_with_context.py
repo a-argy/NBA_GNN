@@ -11,7 +11,8 @@ import requests
 import math
 
 # Configuration
-LOCAL_DATA_DIR = "/Users/anthonyargyropoulos/Documents/GitHub/NBA-Player-Movements/data/2016.NBA.Raw.SportVU.Game.Logs"
+# CHANGE BASED ON WHERE YOUR LOCAL DATA IS AT
+LOCAL_DATA_DIR = "/Users/ianlasic/224W NBA_GNN/NBA_GNN/data"
 PBP_URL = "https://github.com/sumitrodatta/nba-alt-awards/raw/main/Historical/PBP%20Data/2015-16_pbp.csv"
 
 # Court dimensions (in feet)
@@ -397,7 +398,7 @@ def load_shot_attempts(pbp_cache_file="pbp_cache.csv", rim_height=10.0):
             }
             
             all_shots.append(shot_entry)
-    
+    print('all shots', all_shots)
     return all_shots
 
 
@@ -469,4 +470,7 @@ if __name__ == "__main__":
     print("  import json")
     print("  with open('shot_data.json', 'w') as f:")
     print("      json.dump(shots, f, indent=2)")
+
+with open('shot_data.json', 'w') as f:
+      json.dump(shots, f, indent=2)
 

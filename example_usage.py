@@ -7,6 +7,7 @@ from load_with_context import load_nba_data_with_context
 import math
 import pandas as pd
 
+
 def get_description(event):
     """Get event description, handling both home and away team events"""
     desc_home = event['event_info']['desc_home']
@@ -165,4 +166,3 @@ for event_type, count in sorted(type_counts.items()):
 print(f"\n{'=' * 60}")
 print("✓ Examples complete!")
 print("=" * 60)
-

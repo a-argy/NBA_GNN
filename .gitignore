@@ -8,4 +8,6 @@ pbp_cache.csv
 *.json
 data/*.json
 
+*.png
+
 # Keep .7z in LFS (already configured)
