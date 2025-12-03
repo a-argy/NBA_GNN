@@ -212,7 +212,12 @@ def load_shot_attempts(pbp_cache_file="pbp_cache.csv", rim_height=10.0):
                 "game_clock": str (time in MM:SS format, e.g., "11:38"),
                 "offense_position": [[teamid, playerid, x, y, z], ...],
                 "defense_position": [[teamid, playerid, x, y, z], ...],
-                "ball_position": [x, y, z]
+                "ball_position": [x, y, z],
+                "game_id": str,
+                "home_team_id": int,
+                "poss_team_id": int,
+                "quarter": int,
+                "player_positions": {playerid: position_str, ...}
             }
     """
     # Download or load cached PBP data
@@ -247,6 +252,14 @@ def load_shot_attempts(pbp_cache_file="pbp_cache.csv", rim_height=10.0):
         if home_team_id is None:
             print(f"  Warning: Could not determine home team ID, skipping game")
             continue
+        
+        # Build player position mapping from game data
+        player_positions = {}
+        if game['events']:
+            for player in game['events'][0]['home']['players']:
+                player_positions[player['playerid']] = player['position']
+            for player in game['events'][0]['visitor']['players']:
+                player_positions[player['playerid']] = player['position']
         
         for event in game['events']:
 
@@ -346,7 +359,12 @@ def load_shot_attempts(pbp_cache_file="pbp_cache.csv", rim_height=10.0):
                 "game_clock": format_game_clock(release_moment['game_clock']),  # Time at release
                 "offense_position": offense_positions,
                 "defense_position": defense_positions,
-                "ball_position": ball_pos  # Ball position at release (for shooter identification)
+                "ball_position": ball_pos,  # Ball position at release (for shooter identification)
+                "game_id": game_id,
+                "home_team_id": home_team_id,
+                "poss_team_id": poss_team_id,
+                "quarter": quarter,
+                "player_positions": player_positions
             }
             if len(offense_positions) == 0 and len(defense_positions) == 0:
                 print('Game id of invalid shot: ', game_id, shot_entry["game_clock"])

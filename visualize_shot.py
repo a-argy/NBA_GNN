@@ -6,7 +6,7 @@ import networkx as nx
 from build_graph import build_graph_from_shot
 
 # Load the shot data
-with open('shot_data_warriors_game.json', 'r') as f:
+with open('shot_data_new.json', 'r') as f:
     shots = json.load(f)
 
 # Build graph for the first shot
@@ -14,13 +14,34 @@ first_shot = shots[3]
 print("First shot info: \n", first_shot)
 graph = build_graph_from_shot(first_shot)
 print("All node features:")
+print("Node features: [x, y, z, has_ball, is_offense, dist_to_rim, dist_to_ball_handler,")
+print("               angle_to_basket, dist_to_3pt_line, num_nearby_defenders,")
+print("               pos_G, pos_F, pos_C, pos_GF, pos_FC]")
+print("  (For offense: dist_to_ball_handler = distance to nearest defender)")
+print("  (For defense: dist_to_ball_handler = distance to ball handler)")
 for i in range(graph.num_nodes):
-    player_id, x, y, has_ball = graph.x[i].numpy()
-    print(f"Node {i}: player_id={int(player_id)}, x={x:.2f}, y={y:.2f}, has_ball={int(has_ball)}")
+    features = graph.x[i].numpy()
+    x, y, z = features[0], features[1], features[2]
+    has_ball, is_offense = features[3], features[4]
+    dist_to_rim, dist_metric = features[5], features[6]
+    angle_to_basket, dist_to_3pt = features[7], features[8]
+    num_nearby_def = features[9]
+    position_encoding = features[10:15]
+    role = "OFFENSE" if is_offense == 1 else "DEFENSE"
+    metric_name = "dist_to_nearest_def" if is_offense == 1 else "dist_to_ball_handler"
+    print(f"Node {i} ({role}): x={x:.2f}, y={y:.2f}, z={z:.2f}, has_ball={int(has_ball)}, "
+          f"dist_to_rim={dist_to_rim:.2f}, {metric_name}={dist_metric:.2f}, "
+          f"angle={angle_to_basket:.2f}, dist_3pt={dist_to_3pt:.2f}, nearby_def={int(num_nearby_def)}")
 
-for i in range(graph.num_edges):
-    x_rel, y_rel, distance = graph.edge_attr[i]
-    print(f'Edge {i}: x_rel={x_rel}, y_rel={y_rel}, distance={distance}')
+print("\nEdge features: [x_rel, y_rel, distance, edge_angle, O-O, O-D, D-D]")
+for i in range(min(10, graph.num_edges)):  # Show first 10 edges
+    edge_features = graph.edge_attr[i]
+    x_rel, y_rel, distance = edge_features[0], edge_features[1], edge_features[2]
+    edge_angle = edge_features[3]
+    edge_type = edge_features[4:7]
+    edge_type_str = "O-O" if edge_type[0] == 1 else ("O-D" if edge_type[1] == 1 else "D-D")
+    print(f'Edge {i}: x_rel={x_rel:.2f}, y_rel={y_rel:.2f}, distance={distance:.2f}, '
+          f'angle={edge_angle:.2f}, type={edge_type_str}')
 
 print("Graph built successfully!")
 print(f"Number of nodes: {graph.num_nodes}")
@@ -45,7 +66,7 @@ fig, ax = plt.subplots(figsize=(14, 10))
 # Use actual court positions for node layout
 pos = {}
 for i in range(graph.num_nodes):
-    _, x, y,_ = graph.x[i].numpy()
+    x, y = graph.x[i][0].item(), graph.x[i][1].item()
     pos[i] = (x, y)
 
 # Draw edges
