@@ -44,7 +44,8 @@ def download_nba_season_data(output_dir='data', limit=None, extract=True, keep_7
     # Download and extract files
     for file_info in tqdm(seven_z_files, desc="Processing files"):
         file_name = file_info['name']
-        download_url = file_info['download_url']
+        # Construct raw.githubusercontent.com URL to get actual binary file
+        download_url = f"https://raw.githubusercontent.com/linouk23/NBA-Player-Movements/master/data/2016.NBA.Raw.SportVU.Game.Logs/{file_name}"
         seven_z_path = os.path.join(output_dir, file_name)
         
         # Expected JSON filename (remove .7z extension)
@@ -62,15 +63,24 @@ def download_nba_season_data(output_dir='data', limit=None, extract=True, keep_7
                 tqdm.write(f"  Downloading {file_name}...")
                 file_response = requests.get(download_url, timeout=30)
                 if file_response.status_code == 200:
+                    # Check if we actually got a 7z file (magic bytes)
+                    content = file_response.content
+                    if not content.startswith(b'7z\xbc\xaf\x27\x1c'):
+                        tqdm.write(f"  ✗ Downloaded file is not a valid 7z archive")
+                        continue
+                    
                     with open(seven_z_path, 'wb') as f:
-                        f.write(file_response.content)
+                        f.write(content)
                     downloaded_count += 1
                     time.sleep(0.5)  # Be nice to GitHub
                 else:
-                    tqdm.write(f"  ✗ Failed to download {file_name}")
+                    tqdm.write(f"  ✗ Failed to download {file_name}: HTTP {file_response.status_code}")
                     continue
             except Exception as e:
                 tqdm.write(f"  ✗ Error downloading {file_name}: {e}")
+                # Clean up partial download
+                if os.path.exists(seven_z_path):
+                    os.remove(seven_z_path)
                 continue
         
         # Extract .7z file
@@ -87,6 +97,9 @@ def download_nba_season_data(output_dir='data', limit=None, extract=True, keep_7
                     
             except Exception as e:
                 tqdm.write(f"  ✗ Error extracting {file_name}: {e}")
+                # Remove corrupted 7z file so it will be re-downloaded next time
+                if os.path.exists(seven_z_path):
+                    os.remove(seven_z_path)
                 continue
     
             
@@ -123,13 +136,13 @@ if __name__ == "__main__":
     
     # Download first 25 games
     print("Starting download (first 25 games)...")
-    download_nba_season_data(
+    """download_nba_season_data(
         output_dir='data',
         limit=200,
         extract=True,
         keep_7z=False  # Delete .7z after extraction to save space
-    )
+    )"""
     
     # To download ALL games (~600+ files, ~15-20GB total):
     # Uncomment below and comment out the above
-    #download_nba_season_data(output_dir='data', limit=None, extract=True, keep_7z=False)
+    download_nba_season_data(output_dir='data', limit=None, extract=True, keep_7z=False)

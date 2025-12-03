@@ -236,11 +236,19 @@ def load_shot_attempts(pbp_cache_file="pbp_cache.csv", rim_height=10.0):
     print(f"\nFound {len(json_files)} local tracking data files")
     
     all_shots = []
+    file = 1
     for json_file in json_files:
-        print(f"\nProcessing: {os.path.basename(json_file)}")
-        
-        with open(json_file, 'r', encoding='utf-8') as f:
-            game = json.load(f)
+        print(f"\nProcessing {file}: {os.path.basename(json_file)}")
+        file +=1
+        try:
+            with open(json_file, 'r') as f:
+                game = json.load(f)
+        except (json.JSONDecodeError, ValueError) as e:
+            print(f"  ✗ Skipping corrupted file: {os.path.basename(json_file)} - {e}")
+            continue
+        except Exception as e:
+            print(f"  ✗ Error reading {os.path.basename(json_file)}: {e}")
+            continue
         
         game_id = game['gameid']
         
@@ -352,6 +360,7 @@ def load_shot_attempts(pbp_cache_file="pbp_cache.csv", rim_height=10.0):
                     offense_positions.append(player_pos)
                 else:
                     defense_positions.append(player_pos)
+               
 
             # Create shot entry
             shot_entry = {
@@ -370,6 +379,14 @@ def load_shot_attempts(pbp_cache_file="pbp_cache.csv", rim_height=10.0):
                 print('Game id of invalid shot: ', game_id, shot_entry["game_clock"])
             
             all_shots.append(shot_entry)
+        
+        # Delete JSON file after processing to save disk space
+        try:
+            os.remove(json_file)
+            print(f"  ✓ Deleted {os.path.basename(json_file)} to save space")
+        except Exception as e:
+            print(f"  ✗ Could not delete {os.path.basename(json_file)}: {e}")
+    
     return all_shots
 
 

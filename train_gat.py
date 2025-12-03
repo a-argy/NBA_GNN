@@ -49,24 +49,20 @@ class ShotGAT(torch.nn.Module):
     def forward(self, data):
         x, edge_index, edge_attr, batch = data.x, data.edge_index, data.edge_attr, data.batch
         
-        # GATv2 layers with edge features and batch norm
-        x = self.conv1(x, edge_index, edge_attr=edge_attr)
-        x = self.bn1(x)
-        x = F.elu(x)
-        x = F.dropout(x, p=self.dropout, training=self.training)
+        x1 = self.conv1(x, edge_index, edge_attr=edge_attr)
+        x1 = self.bn1(x1)
+        x1 = F.elu(x1)
         
-        x = self.conv2(x, edge_index, edge_attr=edge_attr)
-        x = self.bn2(x)
-        x = F.elu(x)
-        x = F.dropout(x, p=self.dropout, training=self.training)
-        
-        x = self.conv3(x, edge_index, edge_attr=edge_attr)
-        x = self.bn3(x)
-        x = F.elu(x)
-        x = F.dropout(x, p=self.dropout, training=self.training)
+        x2 = self.conv2(x1, edge_index, edge_attr=edge_attr)
+        x2 = self.bn2(x2)
+        x2 = F.elu(x2) + x1  # <-- residual connection
+    
+        x3 = self.conv3(x2, edge_index, edge_attr=edge_attr)
+        x3 = self.bn3(x3)
+        x3 = F.elu(x3) + x2  # <-- residual connection
         
         # Global pooling
-        x = global_mean_pool(x, batch)
+        x = global_mean_pool(x3, batch)
         
         # Classification with deeper MLP
         x = F.elu(self.fc1(x))
@@ -205,8 +201,8 @@ def main():
     BATCH_SIZE = 64
     LEARNING_RATE = 0.001
     EPOCHS = 100
-    HIDDEN_DIM = 128
-    NUM_HEADS = 8
+    HIDDEN_DIM = 64
+    NUM_HEADS = 4
     DROPOUT = 0.3
     USE_CLASS_WEIGHTS = True  # Balance class imbalance
     MAX_SAMPLES = None  # Set to smaller number for testing, None for all data
