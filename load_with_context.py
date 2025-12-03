@@ -138,117 +138,62 @@ def find_moment_at_rim(moments, target_rim, rim_height=10.0, xy_tolerance=2.0, z
     
     return None
 
-def load_nba_data_with_context(pbp_cache_file="pbp_cache.csv"):
+
+def find_moment_of_release(moments, rim_moment, position_tolerance=3.0):
     """
-    Load local NBA tracking data and combine with play-by-play context
+    Find the moment of shot release by tracing back from rim moment to find
+    when the ball was last in a player's hands (ball position matches player position).
+    
+    Args:
+        moments: List of moment dictionaries (chronologically ordered)
+        rim_moment: The moment when ball is at the rim (reference point)
+        position_tolerance: Maximum distance (in feet) for ball to be considered "in hands"
     
     Returns:
-        list: List of enriched events with tracking data and contextual information
+        The moment of release, or None if not found
     """
-    # Download or load cached PBP data
-    if os.path.exists(pbp_cache_file):
-        print(f"Loading cached PBP data from {pbp_cache_file}...")
-        pbp = pd.read_csv(pbp_cache_file)
-    else:
-        print(f"Downloading PBP data from {PBP_URL}...")
-        pbp = pd.read_csv(PBP_URL)
-        pbp.to_csv(pbp_cache_file, index=False)
-        print(f"Cached PBP data to {pbp_cache_file}")
+    if rim_moment is None:
+        return None
     
-    # Find all local JSON files
-    json_files = glob.glob(os.path.join(LOCAL_DATA_DIR, "*.json"))
-    print(f"\nFound {len(json_files)} local tracking data files")
+    # Find the index of the rim moment
+    rim_index = None
+    for idx, moment in enumerate(moments):
+        if moment == rim_moment:
+            rim_index = idx
+            break
     
-    all_events = []
+    if rim_index is None:
+        return None
     
-    for json_file in json_files:
-        print(f"\nProcessing: {os.path.basename(json_file)}")
+    # Trace backwards from rim moment to earlier in time
+    # Game clock decreases as index increases, so we loop backwards (decreasing index)
+    # This goes from rim moment back toward the start of the sequence (earlier times/higher game clocks)
+    for idx in range(rim_index, -1, -1):
+        moment = moments[idx]
         
-        with open(json_file, 'r', encoding='utf-8') as f:
-            game = json.load(f)
+        ball_x = moment['ball_coordinates']['x']
+        ball_y = moment['ball_coordinates']['y']
+        ball_z = moment['ball_coordinates']['z']
         
-        game_id = game['gameid']
-        game_date = game['gamedate']
-        
-        for event in game['events']:
-            event_id = event['eventId']
+        # Check if ball position matches any player position
+        for player in moment['player_coordinates']:
+            player_x = player['x']
+            player_y = player['y']
+            player_z = player['z']
             
-            # Look up matching PBP row
-            event_row = pbp.loc[(pbp.GAME_ID == int(game_id)) & (pbp.EVENTNUM == int(event_id))]
+            # Calculate 3D Euclidean distance between ball and player
+            distance = math.sqrt(
+                (ball_x - player_x)**2 + 
+                (ball_y - player_y)**2 + 
+                (ball_z - player_z)**2
+            )
             
-            if len(event_row) != 1:
-                # No matching PBP data, skip
-                continue
-            
-            # Extract PBP context
-            event_row = event_row.iloc[0]
-            
-            event_type = event_row["EVENTMSGTYPE"]
-            event_home_desc = event_row["HOMEDESCRIPTION"]
-            event_away_desc = event_row["VISITORDESCRIPTION"]
-            
-            primary_home_away = home_away_event_conversion(event_row["PERSON1TYPE"])
-            primary_player_id = event_row["PLAYER1_ID"]
-            primary_team_id = event_row["PLAYER1_TEAM_ID"]
-            
-            secondary_home_away = home_away_event_conversion(event_row["PERSON2TYPE"])
-            secondary_player_id = event_row["PLAYER2_ID"]
-            secondary_team_id = event_row["PLAYER2_TEAM_ID"]
-            
-            poss_team_id = identify_offense(event_row)
-            
-            # Restructure moments with named fields
-            moments = []
-            for moment in event['moments']:
-                moments.append({
-                    "quarter": moment[0],
-                    "game_clock": moment[2],
-                    "shot_clock": moment[3],
-                    "ball_coordinates": {
-                        "x": moment[5][0][2],
-                        "y": moment[5][0][3],
-                        "z": moment[5][0][4]
-                    },
-                    "player_coordinates": [
-                        {
-                            "teamid": player[0],
-                            "playerid": player[1],
-                            "x": player[2],
-                            "y": player[3],
-                            "z": player[4]
-                        } for player in moment[5][1:]
-                    ]
-                })
-            
-            # Build enriched event
-            enriched_event = {
-                "gameid": game_id,
-                "gamedate": game_date,
-                "event_info": {
-                    "id": event_id,
-                    "type": int(event_type),
-                    "possession_team_id": poss_team_id,
-                    "desc_home": event_home_desc,
-                    "desc_away": event_away_desc
-                },
-                "primary_info": {
-                    "team": primary_home_away,
-                    "player_id": primary_player_id,
-                    "team_id": primary_team_id
-                },
-                "secondary_info": {
-                    "team": secondary_home_away,
-                    "player_id": secondary_player_id,
-                    "team_id": secondary_team_id
-                },
-                "visitor": event['visitor'],
-                "home": event['home'],
-                "moments": moments
-            }
-            
-            all_events.append(enriched_event)
+            # If ball is within tolerance of player, this is likely the release moment
+            if distance <= position_tolerance:
+                return moment
     
-    return all_events
+    # If we can't find a release moment, return the rim moment as fallback
+    return rim_moment
 
 
 def load_shot_attempts(pbp_cache_file="pbp_cache.csv", rim_height=10.0):
@@ -282,10 +227,10 @@ def load_shot_attempts(pbp_cache_file="pbp_cache.csv", rim_height=10.0):
     
     # Find all local JSON files
     json_files = glob.glob(os.path.join(LOCAL_DATA_DIR, "*.json"))
+    #json_files = glob.glob(os.path.join(LOCAL_DATA_DIR, '0021500381.json'))  
     print(f"\nFound {len(json_files)} local tracking data files")
     
     all_shots = []
-    
     for json_file in json_files:
         print(f"\nProcessing: {os.path.basename(json_file)}")
         
@@ -304,6 +249,7 @@ def load_shot_attempts(pbp_cache_file="pbp_cache.csv", rim_height=10.0):
             continue
         
         for event in game['events']:
+
             event_id = event['eventId']
             
             # Look up matching PBP row
@@ -363,18 +309,24 @@ def load_shot_attempts(pbp_cache_file="pbp_cache.csv", rim_height=10.0):
             if snapshot_moment is None:
                 continue
             
-            # Extract ball position
+            # Find moment of release (when ball was in player's hands)
+            release_moment = find_moment_of_release(moments, snapshot_moment, position_tolerance=4.0)
+            
+            if release_moment is None:
+                continue
+            
+            # Extract ball position at RELEASE TIME (for shooter identification)
             ball_pos = [
-                snapshot_moment['ball_coordinates']['x'],
-                snapshot_moment['ball_coordinates']['y'],
-                snapshot_moment['ball_coordinates']['z']
+                release_moment['ball_coordinates']['x'],
+                release_moment['ball_coordinates']['y'],
+                release_moment['ball_coordinates']['z']
             ]
             
-            # Separate offensive and defensive players
+            # Separate offensive and defensive players AT RELEASE TIME
             offense_positions = []
             defense_positions = []
             
-            for player in snapshot_moment['player_coordinates']:
+            for player in release_moment['player_coordinates']:
                 player_pos = [
                     player['teamid'],
                     player['playerid'],
@@ -387,18 +339,19 @@ def load_shot_attempts(pbp_cache_file="pbp_cache.csv", rim_height=10.0):
                     offense_positions.append(player_pos)
                 else:
                     defense_positions.append(player_pos)
-            
+
             # Create shot entry
             shot_entry = {
                 "made": is_made,
-                "game_clock": format_game_clock(snapshot_moment['game_clock']),
+                "game_clock": format_game_clock(release_moment['game_clock']),  # Time at release
                 "offense_position": offense_positions,
                 "defense_position": defense_positions,
-                "ball_position": ball_pos
+                "ball_position": ball_pos  # Ball position at release (for shooter identification)
             }
+            if len(offense_positions) == 0 and len(defense_positions) == 0:
+                print('Game id of invalid shot: ', game_id, shot_entry["game_clock"])
             
             all_shots.append(shot_entry)
-    print('all shots', all_shots)
     return all_shots
 
 
@@ -471,6 +424,6 @@ if __name__ == "__main__":
     print("  with open('shot_data.json', 'w') as f:")
     print("      json.dump(shots, f, indent=2)")
 
-with open('shot_data.json', 'w') as f:
+with open('shot_data_new.json', 'w') as f:
       json.dump(shots, f, indent=2)
 

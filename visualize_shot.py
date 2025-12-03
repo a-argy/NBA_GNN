@@ -6,13 +6,21 @@ import networkx as nx
 from build_graph import build_graph_from_shot
 
 # Load the shot data
-with open('shot_data.json', 'r') as f:
+with open('shot_data_warriors_game.json', 'r') as f:
     shots = json.load(f)
 
 # Build graph for the first shot
-first_shot = shots[0]
+first_shot = shots[3]
 print("First shot info: \n", first_shot)
 graph = build_graph_from_shot(first_shot)
+print("All node features:")
+for i in range(graph.num_nodes):
+    player_id, x, y, has_ball = graph.x[i].numpy()
+    print(f"Node {i}: player_id={int(player_id)}, x={x:.2f}, y={y:.2f}, has_ball={int(has_ball)}")
+
+for i in range(graph.num_edges):
+    x_rel, y_rel, distance = graph.edge_attr[i]
+    print(f'Edge {i}: x_rel={x_rel}, y_rel={y_rel}, distance={distance}')
 
 print("Graph built successfully!")
 print(f"Number of nodes: {graph.num_nodes}")
@@ -37,7 +45,7 @@ fig, ax = plt.subplots(figsize=(14, 10))
 # Use actual court positions for node layout
 pos = {}
 for i in range(graph.num_nodes):
-    x, y = graph.x[i].numpy()
+    _, x, y,_ = graph.x[i].numpy()
     pos[i] = (x, y)
 
 # Draw edges
@@ -75,7 +83,7 @@ ax.scatter(ball_x, ball_y, color='orange', s=200, marker='*',
 ax.set_xlabel('X Position (feet)', fontsize=12)
 ax.set_ylabel('Y Position (feet)', fontsize=12)
 ax.set_xlim(0, 94)  # Court length
-ax.set_ylim(0, 50)  # Court width
+ax.set_ylim(50, 0)  # Court width
 ax.set_title(f'Shot Graph Visualization\nComplete Graph: {graph.num_nodes} Nodes, {graph.num_edges//2} Edges\nShot Made: {first_shot["made"]}', 
             fontsize=14, fontweight='bold')
 ax.legend(loc='upper right', fontsize=10)
