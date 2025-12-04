@@ -461,6 +461,6 @@ if __name__ == "__main__":
     print("  with open('shot_data.json', 'w') as f:")
     print("      json.dump(shots, f, indent=2)")
 
-with open('shot_data_new_temp.json', 'w') as f:
-      json.dump(shots, f, indent=2)
-
+    with open('shot_data.json', 'w') as f:
+          json.dump(shots, f, indent=2)
+    
