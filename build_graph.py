@@ -29,7 +29,8 @@ Each shot has:
 Graph structure:
 - 10 nodes (5 offense + 5 defense)
 - Node features: [x_pos, y_pos, z_pos, has_ball, is_offense, dist_to_rim, dist_to_ball_handler, 
-                  angle_to_basket, dist_to_3pt_line, num_nearby_defenders, position_encoding, player_stats]
+                  angle_to_basket, dist_to_3pt_line, num_nearby_defenders, quarter, game_clock, shot_clock,
+                  position_encoding, player_stats]
   - x_pos, y_pos, z_pos: player coordinates (3 features)
   - has_ball: 1 if player has possession, 0 otherwise (1 feature)
   - is_offense: 1 if offensive player, 0 if defensive (1 feature)
@@ -38,12 +39,15 @@ Graph structure:
   - angle_to_basket: Angle from player to basket in radians (1 feature)
   - dist_to_3pt_line: Distance to 3-point arc, negative=inside, positive=outside (1 feature)
   - num_nearby_defenders: Count of defenders within 6 feet (1 feature)
+  - quarter: quarter of the game (1-4) (1 feature)
+  - game_clock: game clock in seconds (0-720) (1 feature)
+  - shot_clock: shot clock in seconds (0-24) (1 feature)
   - position_encoding: one-hot encoding of player position (G, F, C, G-F, F-C) (5 features)
   - player_stats: season shooting stats - 22 features:
       age, fg_pct, avg_dist, pct_fga_fg2a, pct_fga_00_03, pct_fga_03_10, pct_fga_10_16, pct_fga_16_xx,
       pct_fga_fg3a, fg2_pct, fg_pct_00_03, fg_pct_03_10, fg_pct_10_16, fg_pct_16_xx, fg3_pct,
       pct_ast_fg2, pct_ast_fg3, pct_fga_dunk, fg_pct_dunk, pct_fga_corner3, fg_pct_corner3, games
-  Total: 38 features per node
+  Total: 41 features per node
 - Edges: complete graph (10 nodes = 90 directed edges)
 - Edge features: [x_rel, y_rel, euclidean_distance, edge_angle, rel_type_OO, rel_type_OD, rel_type_DD]
   - x_rel, y_rel: relative position (2 features)
@@ -64,6 +68,24 @@ THREE_POINT_DISTANCE = 23.75
 THREE_POINT_CORNER_DISTANCE = 22.0
 # Defensive contest distance threshold (feet)
 CONTEST_DISTANCE = 6.0
+
+def parse_game_clock(game_clock_str):
+    """
+    Parse game clock string (MM:SS) to seconds.
+    Returns float seconds, or 0.0 if parsing fails.
+    """
+    if game_clock_str is None:
+        return 0.0
+    try:
+        if isinstance(game_clock_str, (int, float)):
+            return float(game_clock_str)
+        parts = str(game_clock_str).split(':')
+        if len(parts) == 2:
+            minutes, seconds = int(parts[0]), float(parts[1])
+            return minutes * 60 + seconds
+        return float(game_clock_str)
+    except (ValueError, AttributeError):
+        return 0.0
 
 # Position encoding mapping
 POSITION_MAP = {
@@ -197,7 +219,7 @@ def build_graph_from_shot(shot_data, possession_threshold=4.0):
     """
     Build a PyTorch Geometric graph from a single shot with enriched features.
     
-    Node features (38 total):
+    Node features (41 total):
     - x, y, z: position (3)
     - has_ball: binary flag (1)
     - is_offense: binary flag (1)
@@ -206,6 +228,9 @@ def build_graph_from_shot(shot_data, possession_threshold=4.0):
     - angle_to_basket: angle from player to basket in radians (1)
     - dist_to_3pt_line: distance to 3-point line, negative=inside (1)
     - num_nearby_defenders: count of defenders within 6 feet (1)
+    - quarter: quarter of the game (1-4) (1)
+    - game_clock: game clock in seconds (0-720) (1)
+    - shot_clock: shot clock in seconds (0-24) (1)
     - position_encoding: one-hot for G, F, C, G-F, F-C (5)
     - player_stats: season shooting statistics (22)
     
@@ -228,6 +253,10 @@ def build_graph_from_shot(shot_data, possession_threshold=4.0):
     home_team_id = shot_data.get('home_team_id')
     poss_team_id = shot_data.get('poss_team_id')
     quarter = shot_data.get('quarter', 1)
+    
+    # Extract game state features (raw values, not normalized)
+    game_clock_seconds = shot_data.get('game_clock', 0.0) or 0.0  # Already in seconds
+    shot_clock = shot_data.get('shot_clock', 24.0) or 24.0  # Default to 24 if None
     
     if home_team_id and poss_team_id and quarter:
         target_rim = determine_target_rim(home_team_id, poss_team_id, quarter)
@@ -330,9 +359,10 @@ def build_graph_from_shot(shot_data, possession_threshold=4.0):
             else:
                 print(f"  ✗ PLAYER_STATS is None or empty")
         
-        # Combine all features (38 total)
+        # Combine all features (41 total)
         features = [x, y, z, has_ball, is_offense, dist_to_rim, min_def_dist, 
-                   angle_to_basket, dist_to_3pt, num_nearby_def] + position_encoding + player_stats_features
+                   angle_to_basket, dist_to_3pt, num_nearby_def,
+                   quarter, game_clock_seconds, shot_clock] + position_encoding + player_stats_features
         node_features.append(features)
 
     # Add defensive players (nodes 5-9)
@@ -391,9 +421,10 @@ def build_graph_from_shot(shot_data, possession_threshold=4.0):
             else:
                 print(f"  ✗ PLAYER_STATS is None or empty")
         
-        # Combine all features (38 total)
+        # Combine all features (41 total)
         features = [x, y, z, has_ball, is_offense, dist_to_rim, dist_to_ball_handler,
-                   angle_to_basket, dist_to_3pt, num_nearby_def] + position_encoding + player_stats_features
+                   angle_to_basket, dist_to_3pt, num_nearby_def,
+                   quarter, game_clock_seconds, shot_clock] + position_encoding + player_stats_features
         node_features.append(features)
     
     # Convert to tensor
@@ -401,14 +432,14 @@ def build_graph_from_shot(shot_data, possession_threshold=4.0):
     
     # Debug: Print final tensor info
     print(f"\n[DEBUG] Final tensor shape: {x.shape}")
-    print(f"[DEBUG] Expected: torch.Size([10, 38])")
-    if x.shape[1] == 38:
-        print(f"[DEBUG] ✓ Correct! 38 features per node")
-        # Show stats portion for first node
-        stats_features = x[0, 15:37].tolist()
-        print(f"[DEBUG] First node stats (features 15-36, 22 total): {[f'{x:.4f}' for x in stats_features[:5]]}... (showing first 5 of 22)")
+    print(f"[DEBUG] Expected: torch.Size([10, 41])")
+    if x.shape[1] == 41:
+        print(f"[DEBUG] ✓ Correct! 41 features per node")
+        # Show stats portion for first node (now at indices 18-39)
+        stats_features = x[0, 18:40].tolist()
+        print(f"[DEBUG] First node stats (features 18-39, 22 total): {[f'{x:.4f}' for x in stats_features[:5]]}... (showing first 5 of 22)")
     else:
-        print(f"[DEBUG] ✗ ERROR: Expected 38 features but got {x.shape[1]}")
+        print(f"[DEBUG] ✗ ERROR: Expected 41 features but got {x.shape[1]}")
     
     # Build edge index for complete directed graph
     edge_index = []

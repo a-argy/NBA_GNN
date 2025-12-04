@@ -12,7 +12,7 @@ import math
 
 # Configuration
 # CHANGE BASED ON WHERE YOUR LOCAL DATA IS AT
-LOCAL_DATA_DIR = "/Users/ianlasic/224W NBA_GNN/NBA_GNN/data"
+LOCAL_DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 PBP_URL = "https://github.com/sumitrodatta/nba-alt-awards/raw/main/Historical/PBP%20Data/2015-16_pbp.csv"
 
 # Court dimensions (in feet)
@@ -209,7 +209,7 @@ def load_shot_attempts(pbp_cache_file="pbp_cache.csv", rim_height=10.0):
         list: List of shot attempt dictionaries with format:
             {
                 "made": bool,
-                "game_clock": str (time in MM:SS format, e.g., "11:38"),
+                "game_clock": float (time in seconds),
                 "offense_position": [[teamid, playerid, x, y, z], ...],
                 "defense_position": [[teamid, playerid, x, y, z], ...],
                 "ball_position": [x, y, z],
@@ -372,14 +372,15 @@ def load_shot_attempts(pbp_cache_file="pbp_cache.csv", rim_height=10.0):
             # Create shot entry
             shot_entry = {
                 "made": is_made,
-                "game_clock": format_game_clock(release_moment['game_clock']),  # Time at release
+                "quarter": release_moment['quarter'],  # Quarter from release moment
+                "game_clock": release_moment['game_clock'],  # Game clock at release (seconds)
+                "shot_clock": release_moment['shot_clock'],  # Shot clock at release (seconds)
                 "offense_position": offense_positions,
                 "defense_position": defense_positions,
                 "ball_position": ball_pos,  # Ball position at release (for shooter identification)
                 "game_id": game_id,
                 "home_team_id": home_team_id,
                 "poss_team_id": poss_team_id,
-                "quarter": quarter,
                 "player_positions": player_positions,
                 "player_names": player_names  # Add player names mapping
             }
@@ -451,7 +452,7 @@ if __name__ == "__main__":
     print("\nData format:")
     print("  Each shot contains:")
     print("    - 'made': boolean (True/False)")
-    print("    - 'game_clock': string (time in MM:SS format, e.g., '11:38')")
+    print("    - 'game_clock': float (time in seconds)")
     print("    - 'offense_position': list of [teamid, playerid, x, y, z]")
     print("    - 'defense_position': list of [teamid, playerid, x, y, z]")
     print("    - 'ball_position': [x, y, z]")

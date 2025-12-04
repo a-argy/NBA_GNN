@@ -16,6 +16,7 @@ graph = build_graph_from_shot(first_shot)
 print("All node features:")
 print("Node features: [x, y, z, has_ball, is_offense, dist_to_rim, dist_to_ball_handler,")
 print("               angle_to_basket, dist_to_3pt_line, num_nearby_defenders,")
+print("               quarter, game_clock, shot_clock,")
 print("               pos_G, pos_F, pos_C, pos_GF, pos_FC,")
 print("               age, fg_pct, avg_dist, pct_fga_fg2a, pct_fga_00_03, pct_fga_03_10,")
 print("               pct_fga_10_16, pct_fga_16_xx, pct_fga_fg3a, fg2_pct, fg_pct_00_03,")
@@ -30,8 +31,9 @@ for i in range(graph.num_nodes):
     dist_to_rim, dist_metric = features[5], features[6]
     angle_to_basket, dist_to_3pt = features[7], features[8]
     num_nearby_def = features[9]
-    position_encoding = features[10:15]
-    player_stats = features[15:37]  # 22 stats features (indices 15-36)
+    quarter_val, game_clock_sec, shot_clock_sec = features[10], features[11], features[12]
+    position_encoding = features[13:18]
+    player_stats = features[18:40]  # 22 stats features (indices 18-39)
     role = "OFFENSE" if is_offense == 1 else "DEFENSE"
     metric_name = "dist_to_nearest_def" if is_offense == 1 else "dist_to_ball_handler"
     
@@ -79,6 +81,7 @@ for i in range(graph.num_nodes):
     print(f"  Ball & Role: has_ball={int(has_ball)}, is_offense={int(is_offense)}")
     print(f"  Distances: dist_to_rim={dist_to_rim:.2f}, {metric_name}={dist_metric:.2f}")
     print(f"  Court: angle={angle_to_basket:.2f}, dist_3pt={dist_to_3pt:.2f}, nearby_def={int(num_nearby_def)}")
+    print(f"  Game State: quarter={int(quarter_val)}, game_clock={game_clock_sec:.1f}s, shot_clock={shot_clock_sec:.1f}s")
     print(f"  Position Encoding: {position_encoding.tolist()}")
     print(f"  Player Stats (22 features):")
     print(f"    Age: {age:.4f} (norm), Overall FG%: {fg_pct:.3f}, Avg Dist: {avg_dist:.4f} (norm)")
