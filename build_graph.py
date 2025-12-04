@@ -4,6 +4,19 @@ from torch_geometric.data import Data
 import numpy as np
 import matplotlib.pyplot as plt
 import networkx as nx
+import os
+
+# Load player stats mapping (will be loaded once when module is imported)
+PLAYER_STATS = None
+
+def load_player_stats(stats_file='player_stats_2016.json'):
+    """Load player statistics mapping from JSON file."""
+    global PLAYER_STATS
+    if PLAYER_STATS is None and os.path.exists(stats_file):
+        with open(stats_file, 'r') as f:
+            PLAYER_STATS = json.load(f)
+        print(f"Loaded stats for {len(PLAYER_STATS)} players from {stats_file}")
+    return PLAYER_STATS
 
 """
 Build a graph representation from shot data.
@@ -16,7 +29,7 @@ Each shot has:
 Graph structure:
 - 10 nodes (5 offense + 5 defense)
 - Node features: [x_pos, y_pos, z_pos, has_ball, is_offense, dist_to_rim, dist_to_ball_handler, 
-                  angle_to_basket, dist_to_3pt_line, num_nearby_defenders, position_encoding]
+                  angle_to_basket, dist_to_3pt_line, num_nearby_defenders, position_encoding, player_stats]
   - x_pos, y_pos, z_pos: player coordinates (3 features)
   - has_ball: 1 if player has possession, 0 otherwise (1 feature)
   - is_offense: 1 if offensive player, 0 if defensive (1 feature)
@@ -26,7 +39,11 @@ Graph structure:
   - dist_to_3pt_line: Distance to 3-point arc, negative=inside, positive=outside (1 feature)
   - num_nearby_defenders: Count of defenders within 6 feet (1 feature)
   - position_encoding: one-hot encoding of player position (G, F, C, G-F, F-C) (5 features)
-  Total: 16 features per node
+  - player_stats: season shooting stats - 22 features:
+      age, fg_pct, avg_dist, pct_fga_fg2a, pct_fga_00_03, pct_fga_03_10, pct_fga_10_16, pct_fga_16_xx,
+      pct_fga_fg3a, fg2_pct, fg_pct_00_03, fg_pct_03_10, fg_pct_10_16, fg_pct_16_xx, fg3_pct,
+      pct_ast_fg2, pct_ast_fg3, pct_fga_dunk, fg_pct_dunk, pct_fga_corner3, fg_pct_corner3, games
+  Total: 38 features per node
 - Edges: complete graph (10 nodes = 90 directed edges)
 - Edge features: [x_rel, y_rel, euclidean_distance, edge_angle, rel_type_OO, rel_type_OD, rel_type_DD]
   - x_rel, y_rel: relative position (2 features)
@@ -133,11 +150,54 @@ def calculate_edge_angle(x_i, y_i, x_j, y_j):
     return np.arctan2(dy, dx)
 
 
+def get_player_stats_features(player_id):
+    """
+    Get player statistics features for a given player ID.
+    Returns a list of 22 stat features, or zeros if player not found.
+    """
+    # Try both string and int versions of player_id
+    stats = None
+    if PLAYER_STATS:
+        stats = PLAYER_STATS.get(str(player_id))
+        if stats is None:
+            stats = PLAYER_STATS.get(int(player_id))
+    
+    if stats:
+        features = [
+            stats.get('age', 0) / 40.0,  # Normalize age by ~40
+            stats.get('fg_pct', 0),  # Already 0-1
+            stats.get('avg_dist', 0) / 30.0,  # Normalize by max distance
+            stats.get('pct_fga_fg2a', 0),  # % of FGA that are 2PT
+            stats.get('pct_fga_00_03', 0),  # % at rim (0-3 ft)
+            stats.get('pct_fga_03_10', 0),  # % short mid-range
+            stats.get('pct_fga_10_16', 0),  # % mid-range
+            stats.get('pct_fga_16_xx', 0),  # % long 2PT
+            stats.get('pct_fga_fg3a', 0),  # % of FGA that are 3PT
+            stats.get('fg2_pct', 0),  # 2PT FG%
+            stats.get('fg_pct_00_03', 0),  # FG% at rim
+            stats.get('fg_pct_03_10', 0),  # FG% short mid
+            stats.get('fg_pct_10_16', 0),  # FG% mid-range
+            stats.get('fg_pct_16_xx', 0),  # FG% long 2PT
+            stats.get('fg3_pct', 0),  # 3PT FG%
+            stats.get('pct_ast_fg2', 0),  # % of 2PT assisted
+            stats.get('pct_ast_fg3', 0),  # % of 3PT assisted
+            stats.get('pct_fga_dunk', 0),  # % dunks
+            stats.get('fg_pct_dunk', 0),  # Dunk FG%
+            stats.get('pct_fga_corner3', 0),  # % corner 3s
+            stats.get('fg_pct_corner3', 0),  # Corner 3 FG%
+            stats.get('games', 0) / 82.0,  # Normalize by season length
+        ]
+        return features
+    else:
+        # Return zeros if player not found (e.g., rookie, two-way player)
+        return [0.0] * 22
+
+
 def build_graph_from_shot(shot_data, possession_threshold=4.0):
     """
     Build a PyTorch Geometric graph from a single shot with enriched features.
     
-    Node features (16 total):
+    Node features (38 total):
     - x, y, z: position (3)
     - has_ball: binary flag (1)
     - is_offense: binary flag (1)
@@ -147,6 +207,7 @@ def build_graph_from_shot(shot_data, possession_threshold=4.0):
     - dist_to_3pt_line: distance to 3-point line, negative=inside (1)
     - num_nearby_defenders: count of defenders within 6 feet (1)
     - position_encoding: one-hot for G, F, C, G-F, F-C (5)
+    - player_stats: season shooting statistics (22)
     
     Edge features (7 total):
     - x_rel, y_rel: relative position (2)
@@ -154,6 +215,9 @@ def build_graph_from_shot(shot_data, possession_threshold=4.0):
     - edge_angle: bearing from source to target in radians (1)
     - rel_type_OO, rel_type_OD, rel_type_DD: one-hot edge type (3)
     """
+    # Load player stats if not already loaded
+    load_player_stats()
+    
     # Extract player positions and ball position
     offense_positions = shot_data['offense_position']
     defense_positions = shot_data['defense_position']
@@ -235,9 +299,40 @@ def build_graph_from_shot(shot_data, possession_threshold=4.0):
         position_str = player_positions_map.get(player_id, 'G')
         position_encoding = encode_position(position_str)
         
-        # Combine all features (16 total)
+        # Player stats features
+        player_stats_features = get_player_stats_features(player_id)
+        
+        # Debug: Print player stats for first offensive player
+        if idx == 0:
+            print(f"\n[DEBUG] Offensive Player 0:")
+            print(f"  Player ID: {player_id} (type: {type(player_id)})")
+            print(f"  Position: ({x:.2f}, {y:.2f}, {z:.2f})")
+            print(f"  Has ball: {has_ball}")
+            print(f"  Position type: {position_str}")
+            print(f"  Player stats features (22): {[f'{x:.4f}' for x in player_stats_features]}")
+            
+            # Check if player stats exist
+            player_found = False
+            if PLAYER_STATS:
+                if str(player_id) in PLAYER_STATS:
+                    print(f"  ✓ Found stats using str key: {str(player_id)}")
+                    print(f"  Raw stats: {PLAYER_STATS[str(player_id)]}")
+                    player_found = True
+                elif int(player_id) in PLAYER_STATS:
+                    print(f"  ✓ Found stats using int key: {int(player_id)}")
+                    print(f"  Raw stats: {PLAYER_STATS[int(player_id)]}")
+                    player_found = True
+                
+                if not player_found:
+                    print(f"  ✗ No stats found for player {player_id}")
+                    print(f"  Total players in PLAYER_STATS: {len(PLAYER_STATS)}")
+                    print(f"  Sample keys: {list(PLAYER_STATS.keys())[:5]}")
+            else:
+                print(f"  ✗ PLAYER_STATS is None or empty")
+        
+        # Combine all features (38 total)
         features = [x, y, z, has_ball, is_offense, dist_to_rim, min_def_dist, 
-                   angle_to_basket, dist_to_3pt, num_nearby_def] + position_encoding
+                   angle_to_basket, dist_to_3pt, num_nearby_def] + position_encoding + player_stats_features
         node_features.append(features)
 
     # Add defensive players (nodes 5-9)
@@ -272,13 +367,48 @@ def build_graph_from_shot(shot_data, possession_threshold=4.0):
         position_str = player_positions_map.get(player_id, 'G')
         position_encoding = encode_position(position_str)
         
-        # Combine all features (16 total)
+        # Player stats features
+        player_stats_features = get_player_stats_features(player_id)
+        
+        # Debug: Print player stats for first defensive player
+        if idx == 0:
+            print(f"\n[DEBUG] Defensive Player 0 (Node 5):")
+            print(f"  Player ID: {player_id} (type: {type(player_id)})")
+            print(f"  Position: ({x:.2f}, {y:.2f}, {z:.2f})")
+            print(f"  Position type: {position_str}")
+            print(f"  Player stats features (22): {[f'{x:.4f}' for x in player_stats_features]}")
+            
+            # Check if player stats exist
+            if PLAYER_STATS:
+                if str(player_id) in PLAYER_STATS:
+                    print(f"  ✓ Found stats using str key")
+                    print(f"  Raw stats: {PLAYER_STATS[str(player_id)]}")
+                elif int(player_id) in PLAYER_STATS:
+                    print(f"  ✓ Found stats using int key")
+                    print(f"  Raw stats: {PLAYER_STATS[int(player_id)]}")
+                else:
+                    print(f"  ✗ No stats found for player {player_id}")
+            else:
+                print(f"  ✗ PLAYER_STATS is None or empty")
+        
+        # Combine all features (38 total)
         features = [x, y, z, has_ball, is_offense, dist_to_rim, dist_to_ball_handler,
-                   angle_to_basket, dist_to_3pt, num_nearby_def] + position_encoding
+                   angle_to_basket, dist_to_3pt, num_nearby_def] + position_encoding + player_stats_features
         node_features.append(features)
     
     # Convert to tensor
     x = torch.tensor(node_features, dtype=torch.float)
+    
+    # Debug: Print final tensor info
+    print(f"\n[DEBUG] Final tensor shape: {x.shape}")
+    print(f"[DEBUG] Expected: torch.Size([10, 38])")
+    if x.shape[1] == 38:
+        print(f"[DEBUG] ✓ Correct! 38 features per node")
+        # Show stats portion for first node
+        stats_features = x[0, 15:37].tolist()
+        print(f"[DEBUG] First node stats (features 15-36, 22 total): {[f'{x:.4f}' for x in stats_features[:5]]}... (showing first 5 of 22)")
+    else:
+        print(f"[DEBUG] ✗ ERROR: Expected 38 features but got {x.shape[1]}")
     
     # Build edge index for complete directed graph
     edge_index = []

@@ -237,7 +237,7 @@ def load_shot_attempts(pbp_cache_file="pbp_cache.csv", rim_height=10.0):
     
     all_shots = []
     file = 1
-    for json_file in json_files:
+    for json_file in json_files[:10]:
         print(f"\nProcessing {file}: {os.path.basename(json_file)}")
         file +=1
         try:
@@ -261,13 +261,20 @@ def load_shot_attempts(pbp_cache_file="pbp_cache.csv", rim_height=10.0):
             print(f"  Warning: Could not determine home team ID, skipping game")
             continue
         
-        # Build player position mapping from game data
+        # Build player position mapping and name mapping from game data
         player_positions = {}
+        player_names = {}
         if game['events']:
             for player in game['events'][0]['home']['players']:
                 player_positions[player['playerid']] = player['position']
+                player_names[player['playerid']] = {
+                    'full_name': f"{player.get('firstname', '')} {player.get('lastname', '')}"
+                }
             for player in game['events'][0]['visitor']['players']:
                 player_positions[player['playerid']] = player['position']
+                player_names[player['playerid']] = {
+                    'full_name': f"{player.get('firstname', '')} {player.get('lastname', '')}"
+                }
         
         for event in game['events']:
 
@@ -373,19 +380,13 @@ def load_shot_attempts(pbp_cache_file="pbp_cache.csv", rim_height=10.0):
                 "home_team_id": home_team_id,
                 "poss_team_id": poss_team_id,
                 "quarter": quarter,
-                "player_positions": player_positions
+                "player_positions": player_positions,
+                "player_names": player_names  # Add player names mapping
             }
             if len(offense_positions) == 0 and len(defense_positions) == 0:
                 print('Game id of invalid shot: ', game_id, shot_entry["game_clock"])
             
             all_shots.append(shot_entry)
-        
-        # Delete JSON file after processing to save disk space
-        try:
-            os.remove(json_file)
-            print(f"  ✓ Deleted {os.path.basename(json_file)} to save space")
-        except Exception as e:
-            print(f"  ✗ Could not delete {os.path.basename(json_file)}: {e}")
     
     return all_shots
 
@@ -459,6 +460,6 @@ if __name__ == "__main__":
     print("  with open('shot_data.json', 'w') as f:")
     print("      json.dump(shots, f, indent=2)")
 
-with open('shot_data_new.json', 'w') as f:
+with open('shot_data_new_temp.json', 'w') as f:
       json.dump(shots, f, indent=2)
 

@@ -136,13 +136,13 @@ if __name__ == "__main__":
     
     # Download first 25 games
     print("Starting download (first 25 games)...")
-    """download_nba_season_data(
+    download_nba_season_data(
         output_dir='data',
-        limit=200,
+        limit=100,
         extract=True,
         keep_7z=False  # Delete .7z after extraction to save space
-    )"""
+    )
     
     # To download ALL games (~600+ files, ~15-20GB total):
     # Uncomment below and comment out the above
-    download_nba_season_data(output_dir='data', limit=None, extract=True, keep_7z=False)
+    #download_nba_season_data(output_dir='data', limit=None, extract=True, keep_7z=False)

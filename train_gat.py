@@ -26,7 +26,7 @@ class ShotGAT(torch.nn.Module):
     - Global mean pooling
     - MLP classifier
     """
-    def __init__(self, node_features=15, edge_features=7, hidden_dim=128, num_heads=8, dropout=0.2):
+    def __init__(self, node_features=30, edge_features=7, hidden_dim=128, num_heads=8, dropout=0.2):
         super(ShotGAT, self).__init__()
         
         # GATv2 layers with edge features

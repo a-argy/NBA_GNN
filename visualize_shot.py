@@ -6,17 +6,21 @@ import networkx as nx
 from build_graph import build_graph_from_shot
 
 # Load the shot data
-with open('shot_data_new.json', 'r') as f:
+with open('shot_data_new_temp.json', 'r') as f:
     shots = json.load(f)
 
 # Build graph for the first shot
-first_shot = shots[3]
+first_shot = shots[0]
 print("First shot info: \n", first_shot)
 graph = build_graph_from_shot(first_shot)
 print("All node features:")
 print("Node features: [x, y, z, has_ball, is_offense, dist_to_rim, dist_to_ball_handler,")
 print("               angle_to_basket, dist_to_3pt_line, num_nearby_defenders,")
-print("               pos_G, pos_F, pos_C, pos_GF, pos_FC]")
+print("               pos_G, pos_F, pos_C, pos_GF, pos_FC,")
+print("               age, fg_pct, avg_dist, pct_fga_fg2a, pct_fga_00_03, pct_fga_03_10,")
+print("               pct_fga_10_16, pct_fga_16_xx, pct_fga_fg3a, fg2_pct, fg_pct_00_03,")
+print("               fg_pct_03_10, fg_pct_10_16, fg_pct_16_xx, fg3_pct, pct_ast_fg2, pct_ast_fg3,")
+print("               pct_fga_dunk, fg_pct_dunk, pct_fga_corner3, fg_pct_corner3, games]")
 print("  (For offense: dist_to_ball_handler = distance to nearest defender)")
 print("  (For defense: dist_to_ball_handler = distance to ball handler)")
 for i in range(graph.num_nodes):
@@ -27,11 +31,64 @@ for i in range(graph.num_nodes):
     angle_to_basket, dist_to_3pt = features[7], features[8]
     num_nearby_def = features[9]
     position_encoding = features[10:15]
+    player_stats = features[15:37]  # 22 stats features (indices 15-36)
     role = "OFFENSE" if is_offense == 1 else "DEFENSE"
     metric_name = "dist_to_nearest_def" if is_offense == 1 else "dist_to_ball_handler"
-    print(f"Node {i} ({role}): x={x:.2f}, y={y:.2f}, z={z:.2f}, has_ball={int(has_ball)}, "
-          f"dist_to_rim={dist_to_rim:.2f}, {metric_name}={dist_metric:.2f}, "
-          f"angle={angle_to_basket:.2f}, dist_3pt={dist_to_3pt:.2f}, nearby_def={int(num_nearby_def)}")
+    
+    # Get player ID and name
+    if i < 5:  # Offensive player
+        player_id = first_shot['offense_position'][i][1]
+    else:  # Defensive player
+        player_id = first_shot['defense_position'][i-5][1]
+    
+    player_name = "Unknown"
+    if 'player_names' in first_shot and str(player_id) in first_shot['player_names']:
+        player_name = first_shot['player_names'][str(player_id)].get('full_name', 'Unknown')
+    
+    # Get position type
+    pos_types = ['G', 'F', 'C', 'G-F', 'F-C']
+    pos_idx = position_encoding.argmax() if position_encoding.sum() > 0 else 0
+    pos_type = pos_types[int(pos_idx)]
+    
+    # Extract all 22 stats
+    age = player_stats[0] if len(player_stats) > 0 else 0
+    fg_pct = player_stats[1] if len(player_stats) > 1 else 0
+    avg_dist = player_stats[2] if len(player_stats) > 2 else 0
+    pct_fga_fg2a = player_stats[3] if len(player_stats) > 3 else 0
+    pct_fga_00_03 = player_stats[4] if len(player_stats) > 4 else 0
+    pct_fga_03_10 = player_stats[5] if len(player_stats) > 5 else 0
+    pct_fga_10_16 = player_stats[6] if len(player_stats) > 6 else 0
+    pct_fga_16_xx = player_stats[7] if len(player_stats) > 7 else 0
+    pct_fga_fg3a = player_stats[8] if len(player_stats) > 8 else 0
+    fg2_pct = player_stats[9] if len(player_stats) > 9 else 0
+    fg_pct_00_03 = player_stats[10] if len(player_stats) > 10 else 0
+    fg_pct_03_10 = player_stats[11] if len(player_stats) > 11 else 0
+    fg_pct_10_16 = player_stats[12] if len(player_stats) > 12 else 0
+    fg_pct_16_xx = player_stats[13] if len(player_stats) > 13 else 0
+    fg3_pct = player_stats[14] if len(player_stats) > 14 else 0
+    pct_ast_fg2 = player_stats[15] if len(player_stats) > 15 else 0
+    pct_ast_fg3 = player_stats[16] if len(player_stats) > 16 else 0
+    pct_fga_dunk = player_stats[17] if len(player_stats) > 17 else 0
+    fg_pct_dunk = player_stats[18] if len(player_stats) > 18 else 0
+    pct_fga_corner3 = player_stats[19] if len(player_stats) > 19 else 0
+    fg_pct_corner3 = player_stats[20] if len(player_stats) > 20 else 0
+    games = player_stats[21] if len(player_stats) > 21 else 0
+    
+    print(f"\nNode {i} ({role}, {pos_type}) - {player_name} (ID: {player_id}):")
+    print(f"  Position: x={x:.2f}, y={y:.2f}, z={z:.2f}")
+    print(f"  Ball & Role: has_ball={int(has_ball)}, is_offense={int(is_offense)}")
+    print(f"  Distances: dist_to_rim={dist_to_rim:.2f}, {metric_name}={dist_metric:.2f}")
+    print(f"  Court: angle={angle_to_basket:.2f}, dist_3pt={dist_to_3pt:.2f}, nearby_def={int(num_nearby_def)}")
+    print(f"  Position Encoding: {position_encoding.tolist()}")
+    print(f"  Player Stats (22 features):")
+    print(f"    Age: {age:.4f} (norm), Overall FG%: {fg_pct:.3f}, Avg Dist: {avg_dist:.4f} (norm)")
+    print(f"    Shot Distribution: 2PT%={pct_fga_fg2a:.3f}, 3PT%={pct_fga_fg3a:.3f}")
+    print(f"    2PT Zones: 0-3ft={pct_fga_00_03:.3f}, 3-10ft={pct_fga_03_10:.3f}, 10-16ft={pct_fga_10_16:.3f}, 16+ft={pct_fga_16_xx:.3f}")
+    print(f"    2PT Accuracy: Overall={fg2_pct:.3f}, 0-3ft={fg_pct_00_03:.3f}, 3-10ft={fg_pct_03_10:.3f}, 10-16ft={fg_pct_10_16:.3f}, 16+ft={fg_pct_16_xx:.3f}")
+    print(f"    3PT: FG%={fg3_pct:.3f}, Corner%={pct_fga_corner3:.3f}, Corner FG%={fg_pct_corner3:.3f}")
+    print(f"    Assists: 2PT={pct_ast_fg2:.3f}, 3PT={pct_ast_fg3:.3f}")
+    print(f"    Dunks: Freq={pct_fga_dunk:.3f}, FG%={fg_pct_dunk:.3f}")
+    print(f"    Games: {games:.4f} (norm)")
 
 print("\nEdge features: [x_rel, y_rel, distance, edge_angle, O-O, O-D, D-D]")
 for i in range(min(10, graph.num_edges)):  # Show first 10 edges
