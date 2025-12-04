@@ -237,7 +237,7 @@ def load_shot_attempts(pbp_cache_file="pbp_cache.csv", rim_height=10.0):
     
     all_shots = []
     file = 1
-    for json_file in json_files[:10]:
+    for json_file in json_files:
         print(f"\nProcessing {file}: {os.path.basename(json_file)}")
         file +=1
         try:
