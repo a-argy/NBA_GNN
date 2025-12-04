@@ -381,8 +381,8 @@ def build_graph_from_shot(shot_data, possession_threshold=4.0):
     
     # Convert to tensor
     x = torch.tensor(node_features, dtype=torch.float)
-    
-    # Verify node feature dimensions
+    print('shape of node features: ', x.shape[1])
+    # Verify node feature dimensions    
     assert x.shape[0] == 10, f"Expected 10 nodes (5 offense + 5 defense), got {x.shape[0]}"
     assert x.shape[1] == 41, f"Expected 41 node features (3 pos + 5 basic + 2 spatial + 3 clock + 5 position + 23 stats), got {x.shape[1]}"
   
