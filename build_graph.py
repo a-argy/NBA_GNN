@@ -331,34 +331,6 @@ def build_graph_from_shot(shot_data, possession_threshold=4.0):
         # Player stats features
         player_stats_features = get_player_stats_features(player_id)
         
-        # Debug: Print player stats for first offensive player
-        if idx == 0:
-            print(f"\n[DEBUG] Offensive Player 0:")
-            print(f"  Player ID: {player_id} (type: {type(player_id)})")
-            print(f"  Position: ({x:.2f}, {y:.2f}, {z:.2f})")
-            print(f"  Has ball: {has_ball}")
-            print(f"  Position type: {position_str}")
-            print(f"  Player stats features (22): {[f'{x:.4f}' for x in player_stats_features]}")
-            
-            # Check if player stats exist
-            player_found = False
-            if PLAYER_STATS:
-                if str(player_id) in PLAYER_STATS:
-                    print(f"  ✓ Found stats using str key: {str(player_id)}")
-                    print(f"  Raw stats: {PLAYER_STATS[str(player_id)]}")
-                    player_found = True
-                elif int(player_id) in PLAYER_STATS:
-                    print(f"  ✓ Found stats using int key: {int(player_id)}")
-                    print(f"  Raw stats: {PLAYER_STATS[int(player_id)]}")
-                    player_found = True
-                
-                if not player_found:
-                    print(f"  ✗ No stats found for player {player_id}")
-                    print(f"  Total players in PLAYER_STATS: {len(PLAYER_STATS)}")
-                    print(f"  Sample keys: {list(PLAYER_STATS.keys())[:5]}")
-            else:
-                print(f"  ✗ PLAYER_STATS is None or empty")
-        
         # Combine all features (41 total)
         features = [x, y, z, has_ball, is_offense, dist_to_rim, min_def_dist, 
                    angle_to_basket, dist_to_3pt, num_nearby_def,
@@ -400,26 +372,6 @@ def build_graph_from_shot(shot_data, possession_threshold=4.0):
         # Player stats features
         player_stats_features = get_player_stats_features(player_id)
         
-        # Debug: Print player stats for first defensive player
-        if idx == 0:
-            print(f"\n[DEBUG] Defensive Player 0 (Node 5):")
-            print(f"  Player ID: {player_id} (type: {type(player_id)})")
-            print(f"  Position: ({x:.2f}, {y:.2f}, {z:.2f})")
-            print(f"  Position type: {position_str}")
-            print(f"  Player stats features (22): {[f'{x:.4f}' for x in player_stats_features]}")
-            
-            # Check if player stats exist
-            if PLAYER_STATS:
-                if str(player_id) in PLAYER_STATS:
-                    print(f"  ✓ Found stats using str key")
-                    print(f"  Raw stats: {PLAYER_STATS[str(player_id)]}")
-                elif int(player_id) in PLAYER_STATS:
-                    print(f"  ✓ Found stats using int key")
-                    print(f"  Raw stats: {PLAYER_STATS[int(player_id)]}")
-                else:
-                    print(f"  ✗ No stats found for player {player_id}")
-            else:
-                print(f"  ✗ PLAYER_STATS is None or empty")
         
         # Combine all features (41 total)
         features = [x, y, z, has_ball, is_offense, dist_to_rim, dist_to_ball_handler,
@@ -430,17 +382,10 @@ def build_graph_from_shot(shot_data, possession_threshold=4.0):
     # Convert to tensor
     x = torch.tensor(node_features, dtype=torch.float)
     
-    # Debug: Print final tensor info
-    print(f"\n[DEBUG] Final tensor shape: {x.shape}")
-    print(f"[DEBUG] Expected: torch.Size([10, 41])")
-    if x.shape[1] == 41:
-        print(f"[DEBUG] ✓ Correct! 41 features per node")
-        # Show stats portion for first node (now at indices 18-39)
-        stats_features = x[0, 18:40].tolist()
-        print(f"[DEBUG] First node stats (features 18-39, 22 total): {[f'{x:.4f}' for x in stats_features[:5]]}... (showing first 5 of 22)")
-    else:
-        print(f"[DEBUG] ✗ ERROR: Expected 41 features but got {x.shape[1]}")
-    
+    # Verify node feature dimensions
+    assert x.shape[0] == 10, f"Expected 10 nodes (5 offense + 5 defense), got {x.shape[0]}"
+    assert x.shape[1] == 41, f"Expected 41 node features (3 pos + 5 basic + 2 spatial + 3 clock + 5 position + 23 stats), got {x.shape[1]}"
+  
     # Build edge index for complete directed graph
     edge_index = []
     for i in range(10):
@@ -489,6 +434,10 @@ def build_graph_from_shot(shot_data, possession_threshold=4.0):
             edge_attr.append([x_rel, y_rel, distance, edge_angle] + rel_type)
     
     edge_attr = torch.tensor(edge_attr, dtype=torch.float)
+    
+    # Verify edge feature dimensions
+    assert edge_attr.shape[0] == 90, f"Expected 90 edges (10 nodes * 9 connections each), got {edge_attr.shape[0]}"
+    assert edge_attr.shape[1] == 7, f"Expected 7 edge features (2 rel pos + 1 distance + 1 angle + 3 edge type), got {edge_attr.shape[1]}"
     
     # Create PyTorch Geometric Data object
     data = Data(x=x, edge_index=edge_index, edge_attr=edge_attr)
