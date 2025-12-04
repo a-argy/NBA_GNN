@@ -26,10 +26,9 @@ class ShotGAT(torch.nn.Module):
     - Global mean pooling
     - MLP classifier
     
-    Node features (41 total):
+    Node features (40 total):
     - Position: x, y, z (3)
-    - Basic: has_ball, is_offense, dist_to_rim, min_def_dist, angle_to_basket (5)
-    - Spatial: dist_to_3pt, num_nearby_defenders (2)
+    - Basic: has_ball, is_offense, dist_to_rim, min_def_dist, angle_to_basket, dist_to_3pt, num_nearby_defenders (7)
     - Clock: quarter, game_clock, shot_clock (3)
     - Position encoding: one-hot for G, F, C, G-F, F-C (5)
     - Player stats: 22 season shooting statistics (22)
@@ -39,7 +38,7 @@ class ShotGAT(torch.nn.Module):
     - Distance metrics: euclidean_distance, edge_angle (2)
     - Edge type encoding: rel_type_OO, rel_type_OD, rel_type_DD (3)
     """
-    def __init__(self, node_features=41, edge_features=7, hidden_dim=128, num_heads=8, dropout=0.2):
+    def __init__(self, node_features=40, edge_features=7, hidden_dim=64, num_heads=4, dropout=0.2):
         super(ShotGAT, self).__init__()
         
         # GATv2 layers with edge features
@@ -248,7 +247,7 @@ def main():
     
     # Initialize model
     model = ShotGAT(
-        node_features=41,  # 3 pos (x,y,z) + 5 basic (has_ball, is_offense, dist_to_rim, min_def_dist, angle_to_basket) + 2 spatial (dist_3pt, nearby_def) + 3 clock (quarter, game_clock, shot_clock) + 5 position encoding + 22 player stats
+        node_features=40,  # 3 pos (x,y,z) + 7 basic (has_ball, is_offense, dist_to_rim, min_def_dist, angle_to_basket, dist_3pt, nearby_def) + 3 clock (quarter, game_clock, shot_clock) + 5 position encoding + 22 player stats
         edge_features=7,   # x_rel, y_rel, distance, edge_angle, + 3 edge type one-hot
         hidden_dim=HIDDEN_DIM,
         num_heads=NUM_HEADS,

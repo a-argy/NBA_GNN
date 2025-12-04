@@ -47,7 +47,7 @@ Graph structure:
       age, fg_pct, avg_dist, pct_fga_fg2a, pct_fga_00_03, pct_fga_03_10, pct_fga_10_16, pct_fga_16_xx,
       pct_fga_fg3a, fg2_pct, fg_pct_00_03, fg_pct_03_10, fg_pct_10_16, fg_pct_16_xx, fg3_pct,
       pct_ast_fg2, pct_ast_fg3, pct_fga_dunk, fg_pct_dunk, pct_fga_corner3, fg_pct_corner3, games
-  Total: 41 features per node
+  Total: 40 features per node
 - Edges: complete graph (10 nodes = 90 directed edges)
 - Edge features: [x_rel, y_rel, euclidean_distance, edge_angle, rel_type_OO, rel_type_OD, rel_type_DD]
   - x_rel, y_rel: relative position (2 features)
@@ -219,7 +219,7 @@ def build_graph_from_shot(shot_data, possession_threshold=4.0):
     """
     Build a PyTorch Geometric graph from a single shot with enriched features.
     
-    Node features (41 total):
+    Node features (40 total):
     - x, y, z: position (3)
     - has_ball: binary flag (1)
     - is_offense: binary flag (1)
@@ -331,7 +331,7 @@ def build_graph_from_shot(shot_data, possession_threshold=4.0):
         # Player stats features
         player_stats_features = get_player_stats_features(player_id)
         
-        # Combine all features (41 total)
+        # Combine all features (40 total)
         features = [x, y, z, has_ball, is_offense, dist_to_rim, min_def_dist, 
                    angle_to_basket, dist_to_3pt, num_nearby_def,
                    quarter, game_clock_seconds, shot_clock] + position_encoding + player_stats_features
@@ -373,7 +373,7 @@ def build_graph_from_shot(shot_data, possession_threshold=4.0):
         player_stats_features = get_player_stats_features(player_id)
         
         
-        # Combine all features (41 total)
+        # Combine all features (40 total)
         features = [x, y, z, has_ball, is_offense, dist_to_rim, dist_to_ball_handler,
                    angle_to_basket, dist_to_3pt, num_nearby_def,
                    quarter, game_clock_seconds, shot_clock] + position_encoding + player_stats_features
@@ -381,10 +381,9 @@ def build_graph_from_shot(shot_data, possession_threshold=4.0):
     
     # Convert to tensor
     x = torch.tensor(node_features, dtype=torch.float)
-    print('shape of node features: ', x.shape[1])
     # Verify node feature dimensions    
     assert x.shape[0] == 10, f"Expected 10 nodes (5 offense + 5 defense), got {x.shape[0]}"
-    assert x.shape[1] == 41, f"Expected 41 node features (3 pos + 5 basic + 2 spatial + 3 clock + 5 position + 23 stats), got {x.shape[1]}"
+    assert x.shape[1] == 40, f"Expected 40 node features (3 pos + 7 basic + 3 clock + 5 position + 22 stats), got {x.shape[1]}"
   
     # Build edge index for complete directed graph
     edge_index = []
