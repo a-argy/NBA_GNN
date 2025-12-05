@@ -217,7 +217,7 @@ def get_player_stats_features(player_id):
 
 def build_graph_from_shot(shot_data, possession_threshold=4.0):
     """
-    Build a PyTorch Geometric graph from a single shot with enriched features.
+    Build a PyTorch Geometric graph from a single shot with NORMALIZED features.
     
     Node features (40 total):
     - x, y, z: position (3)
@@ -296,87 +296,113 @@ def build_graph_from_shot(shot_data, possession_threshold=4.0):
     if player_with_ball >= 0:
         ball_handler_pos = (offense_positions[player_with_ball][2], offense_positions[player_with_ball][3])
 
-    # Add offensive players (nodes 0-4)
+    # Normalization constants
+    COURT_LENGTH_NORM = 94.0
+    COURT_WIDTH_NORM = 50.0
+    MAX_HEIGHT = 10.0
+    MAX_DISTANCE = 100.0  # Approximate max court diagonal
+    MAX_GAME_CLOCK = 720.0  # 12 minutes
+    MAX_SHOT_CLOCK = 24.0
+    
+    # Add offensive players (nodes 0-4) with NORMALIZED features
     for idx, player in enumerate(offense_positions):
         team_id, player_id, x, y, z = player[0], player[1], player[2], player[3], player[4]
+        
+        # Normalize positions to [0, 1]
+        x_norm = x / COURT_LENGTH_NORM
+        y_norm = y / COURT_WIDTH_NORM
+        z_norm = z / MAX_HEIGHT
         
         # Basic features
         has_ball = 1.0 if idx == player_with_ball else 0.0
         is_offense = 1.0
         
-        # Distance to rim
+        # Normalize distance to rim
         dist_to_rim = np.sqrt((x - target_rim[0])**2 + (y - target_rim[1])**2)
+        dist_to_rim_norm = dist_to_rim / MAX_DISTANCE
         
-        # Distance to nearest defender
+        # Normalize distance to nearest defender
         min_def_dist = float('inf')
         for def_player in defense_positions:
             def_x, def_y = def_player[2], def_player[3]
             dist = np.sqrt((x - def_x)**2 + (y - def_y)**2)
             min_def_dist = min(min_def_dist, dist)
+        min_def_dist_norm = min_def_dist / MAX_DISTANCE
         
-        # NEW FEATURES
-        # Angle to basket
+        # Normalize angle to [-1, 1]
         angle_to_basket = calculate_angle_to_basket(x, y, target_rim)
+        angle_norm = angle_to_basket / np.pi
         
-        # Distance to 3-point line
+        # Normalize distance to 3-point line
         dist_to_3pt = calculate_distance_to_three_point_line(x, y, target_rim)
+        dist_to_3pt_norm = np.tanh(dist_to_3pt / 10.0)  # Use tanh for unbounded values
         
-        # Number of nearby defenders (within 6 feet)
+        # Normalize nearby defenders count
         num_nearby_def = count_nearby_defenders(x, y, defense_positions)
+        num_nearby_def_norm = num_nearby_def / 5.0  # Max 5 defenders
         
-        # Position encoding
+        # Normalize clock features
+        quarter_norm = quarter / 4.0
+        game_clock_norm = game_clock_seconds / MAX_GAME_CLOCK
+        shot_clock_norm = shot_clock / MAX_SHOT_CLOCK
+        
+        # Get position encoding and player stats (already normalized)
         position_str = player_positions_map.get(player_id, 'G')
         position_encoding = encode_position(position_str)
-        
-        # Player stats features
         player_stats_features = get_player_stats_features(player_id)
         
-        # Combine all features (40 total)
-        features = [x, y, z, has_ball, is_offense, dist_to_rim, min_def_dist, 
-                   angle_to_basket, dist_to_3pt, num_nearby_def,
-                   quarter, game_clock_seconds, shot_clock] + position_encoding + player_stats_features
+        # Combine NORMALIZED features (40 total)
+        features = [x_norm, y_norm, z_norm, has_ball, is_offense, dist_to_rim_norm, min_def_dist_norm,
+                   angle_norm, dist_to_3pt_norm, num_nearby_def_norm,
+                   quarter_norm, game_clock_norm, shot_clock_norm] + position_encoding + player_stats_features
         node_features.append(features)
 
-    # Add defensive players (nodes 5-9)
+    # Add defensive players (nodes 5-9) with NORMALIZED features
     for idx, player in enumerate(defense_positions):
         team_id, player_id, x, y, z = player[0], player[1], player[2], player[3], player[4]
         
-        # Basic features
+        # Normalize positions
+        x_norm = x / COURT_LENGTH_NORM
+        y_norm = y / COURT_WIDTH_NORM
+        z_norm = z / MAX_HEIGHT
+        
         has_ball = 0.0
         is_offense = 0.0
         
-        # Distance to rim
+        # Normalize distance to rim
         dist_to_rim = np.sqrt((x - target_rim[0])**2 + (y - target_rim[1])**2)
+        dist_to_rim_norm = dist_to_rim / MAX_DISTANCE
         
-        # Distance to ball handler (if identified)
+        # Normalize distance to ball handler
         if ball_handler_pos is not None:
             dist_to_ball_handler = np.sqrt((x - ball_handler_pos[0])**2 + (y - ball_handler_pos[1])**2)
         else:
-            # Fallback: distance to ball position
             dist_to_ball_handler = np.sqrt((x - ball_x)**2 + (y - ball_y)**2)
+        dist_to_ball_handler_norm = dist_to_ball_handler / MAX_DISTANCE
         
-        # NEW FEATURES
-        # Angle to basket
+        # Normalize angle
         angle_to_basket = calculate_angle_to_basket(x, y, target_rim)
+        angle_norm = angle_to_basket / np.pi
         
-        # Distance to 3-point line
+        # Normalize distance to 3pt
         dist_to_3pt = calculate_distance_to_three_point_line(x, y, target_rim)
+        dist_to_3pt_norm = np.tanh(dist_to_3pt / 10.0)
         
-        # Number of nearby defenders (0 for defenders, but keep feature for consistency)
-        num_nearby_def = 0.0
+        num_nearby_def_norm = 0.0
         
-        # Position encoding
+        # Normalize clock
+        quarter_norm = quarter / 4.0
+        game_clock_norm = game_clock_seconds / MAX_GAME_CLOCK
+        shot_clock_norm = shot_clock / MAX_SHOT_CLOCK
+        
         position_str = player_positions_map.get(player_id, 'G')
         position_encoding = encode_position(position_str)
-        
-        # Player stats features
         player_stats_features = get_player_stats_features(player_id)
         
-        
-        # Combine all features (40 total)
-        features = [x, y, z, has_ball, is_offense, dist_to_rim, dist_to_ball_handler,
-                   angle_to_basket, dist_to_3pt, num_nearby_def,
-                   quarter, game_clock_seconds, shot_clock] + position_encoding + player_stats_features
+        # Combine NORMALIZED features (40 total)
+        features = [x_norm, y_norm, z_norm, has_ball, is_offense, dist_to_rim_norm, dist_to_ball_handler_norm,
+                   angle_norm, dist_to_3pt_norm, num_nearby_def_norm,
+                   quarter_norm, game_clock_norm, shot_clock_norm] + position_encoding + player_stats_features
         node_features.append(features)
     
     # Convert to tensor
