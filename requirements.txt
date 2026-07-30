@@ -1,0 +1,12 @@
+numpy
+pandas
+scikit-learn
+xgboost
+torch
+torch-geometric
+matplotlib
+seaborn
+networkx
+tqdm
+requests
+py7zr

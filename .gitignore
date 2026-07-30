@@ -1,0 +1,46 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyc
+
+# Large data files - exclude from repo
+pbp_cache.csv
+*.json
+*.txt
+*.png
+*.pt
+
+# Keep .7z in LFS (already configured)
+# Large binary data files (stored on GCS)
+*.npy
+*.pkl
+colab/data/baseline_data/
+colab/phase2/results/ext_pca_gmm/gru_embeddings.npy
+colab/phase2/results/ext_pca_gmm/gmm_responsibilities.npy
+colab/phase2/results/player_embeddings.pkl
+
+# Keep dependency list despite *.txt data rule above
+!requirements.txt
+
+# macOS
+.DS_Store
+
+# Local tooling and class-submission artifacts (not for public repo)
+.claude/
+submission/
+submission.zip
+
+# LaTeX build artifacts
+*.aux
+*.nav
+*.snm
+*.toc
+*.bbl
+*.blg
+*.log
+*.out
+texput.log
+
+# Keep report/poster images despite *.png data rule above
+!report/figures/*.png
+!report/poster/**/*.png
